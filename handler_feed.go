@@ -42,6 +42,28 @@ func handlerAddFeed(s *state, cmd command) error {
 	return nil
 }
 
+func handlerFeeds(s *state, cmd command) error {
+	feeds, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return fmt.Errorf("couldn't get feeds: %w", err)
+	}
+
+	if len(feeds) == 0 {
+		fmt.Println("No feeds found.")
+		return nil
+	}
+
+	fmt.Printf("Found %d feeds:\n", len(feeds))
+	for _, feed := range feeds {
+		fmt.Printf("\n * Feed Name:	%v\n", feed.Name)
+		fmt.Printf(" * URL:		%v\n", feed.Url)
+		fmt.Printf(" * User Name:	%v\n\n", feed.Name_2)
+		fmt.Println("=====================================")
+	}
+
+	return nil
+}
+
 func printDBFeed(feed database.Feed) {
 	fmt.Printf("* ID:            %s\n", feed.ID)
 	fmt.Printf("* Created:       %v\n", feed.CreatedAt)
