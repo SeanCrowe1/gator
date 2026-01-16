@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/seancrowe1/gator/internal/database"
 )
 
@@ -54,20 +55,56 @@ func scrapeFeeds(s *state) error {
 	}
 
 	for _, item := range feed.Channel.Item {
-		fmt.Printf(" * Title: %s\n", item.Title)
+		_, err = s.db.GetPostByUrl(context.Background(), item.Link)
+		if err == nil {
+			continue
+		}
+		pubDate := time.Now()
+		pubDate, err = time.Parse(time.ANSIC, item.PubDate)
+		if err != nil {
+			pubDate, err = time.Parse(time.UnixDate, item.PubDate)
+			if err != nil {
+				pubDate, err = time.Parse(time.RubyDate, item.PubDate)
+				if err != nil {
+					pubDate, err = time.Parse(time.RFC822, item.PubDate)
+					if err != nil {
+						pubDate, err = time.Parse(time.RFC822Z, item.PubDate)
+						if err != nil {
+							pubDate, err = time.Parse(time.RFC850, item.PubDate)
+							if err != nil {
+								pubDate, err = time.Parse(time.RFC1123, item.PubDate)
+								if err != nil {
+									pubDate, err = time.Parse(time.RFC1123Z, item.PubDate)
+									if err != nil {
+										pubDate, err = time.Parse(time.RFC3339, item.PubDate)
+										if err != nil {
+											pubDate, err = time.Parse(time.RFC3339Nano, item.PubDate)
+											if err != nil {
+												return err
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		err = s.db.CreatePost(context.Background(), database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: item.Description,
+			PublishedAt: pubDate,
+			FeedID:      DBfeed.ID,
+		})
+		if err != nil {
+			return fmt.Errorf("couldn't create post: %w", err)
+		}
 	}
 
 	return nil
-}
-
-func printFeed(f *RSSFeed) {
-	fmt.Printf(" * Title: 		%v\n", f.Channel.Title)
-	fmt.Printf(" * Link: 		%v\n", f.Channel.Link)
-	fmt.Printf(" * Description: %v\n\n", f.Channel.Description)
-	for _, item := range f.Channel.Item {
-		fmt.Printf(" ** Title: 			%v\n", item.Title)
-		fmt.Printf(" ** Link: 			%v\n", item.Link)
-		fmt.Printf(" ** Description: 	\n%v\n", item.Description)
-		fmt.Printf(" ** PubDate: 		%v\n\n", item.PubDate)
-	}
 }
