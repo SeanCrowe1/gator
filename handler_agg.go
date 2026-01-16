@@ -2,16 +2,61 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"time"
+
+	"github.com/seancrowe1/gator/internal/database"
 )
 
 func handlerAgg(s *state, cmd command) error {
-	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: %s <time_between_reqs>", cmd.Name)
+	}
+
+	dur, err := time.ParseDuration(cmd.Args[0])
+	if err != nil {
+		return fmt.Errorf("couldn't parse duration: %w", err)
+	}
+
+	fmt.Printf("Collecting feeds every %v\n", dur)
+
+	ticker := time.NewTicker(dur)
+
+	for ; ; <-ticker.C {
+		err = scrapeFeeds(s)
+		if err != nil {
+			return fmt.Errorf("couldn't scrape feed: %w", err)
+		}
+	}
+}
+
+func scrapeFeeds(s *state) error {
+	DBfeed, err := s.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return fmt.Errorf("couldn't get next feed to fetch: %w", err)
+	}
+
+	err = s.db.MarkFeedFetched(context.Background(), database.MarkFeedFetchedParams{
+		LastFetchedAt: sql.NullTime{
+			Time:  time.Now(),
+			Valid: true,
+		},
+		ID: DBfeed.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("couldn't mark feed as fetched: %w", err)
+	}
+
+	feed, err := fetchFeed(context.Background(), DBfeed.Url)
 	if err != nil {
 		return fmt.Errorf("couldn't fetch feed: %w", err)
 	}
 
-	printFeed(feed)
+	for _, item := range feed.Channel.Item {
+		fmt.Printf(" * Title: %s\n", item.Title)
+	}
+
 	return nil
 }
 
